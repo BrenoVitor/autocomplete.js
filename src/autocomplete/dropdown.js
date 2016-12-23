@@ -31,8 +31,10 @@ function Dropdown(o) {
   this.isOpen = false;
   this.isEmpty = true;
   this.minLength = o.minLength || 0;
-  this.cssClasses = _.mixin({}, css.defaultClasses, o.cssClasses || {});
   this.templates = {};
+  this.appendToBody = !!o.appendToBody;
+  this.css = _.mixin({}, css, o.appendToBody ? css.appendToBody : {});
+  this.cssClasses = o.cssClasses = _.mixin({}, css.defaultClasses, o.cssClasses || {});
 
   // bound functions
   onSuggestionClick = _.bind(this._onSuggestionClick, this);
@@ -44,6 +46,11 @@ function Dropdown(o) {
     .on('click.aa', cssClass, onSuggestionClick)
     .on('mouseenter.aa', cssClass, onSuggestionMouseEnter)
     .on('mouseleave.aa', cssClass, onSuggestionMouseLeave);
+
+  this.$input = o.input;
+  this.$wrapper = o.wrapper;
+
+  this.$container = o.appendToBody ? this.$wrapper : this.$menu;
 
   if (o.templates && o.templates.header) {
     this.templates.header = _.templatify(o.templates.header);
@@ -73,6 +80,8 @@ function Dropdown(o) {
     this.templates.footer = _.templatify(o.templates.footer);
     this.$menu.append(this.templates.footer());
   }
+
+  DOM.element(window).resize(this._redraw.bind(this));
 }
 
 // instance methods
@@ -162,15 +171,52 @@ _.mixin(Dropdown.prototype, EventEmitter, {
   },
 
   _hide: function() {
-    this.$menu.hide();
+    this.$container.hide();
   },
 
   _show: function() {
     // can't use jQuery#show because $menu is a span element we want
     // display: block; not dislay: inline;
-    this.$menu.css('display', 'block');
+    this.$container.css('display', 'block');
+
+    this._redraw();
 
     this.trigger('shown');
+  },
+
+  _redraw: function redraw() {
+    if (!this.isOpen || !this.appendToBody) return;
+
+    function outerWidth($elem, margin) {
+      var size = $elem[0].offsetWidth;
+      ['left', 'right'].forEach(function(side) {
+        if (margin) size += parseInt($elem.css('margin-' + side), 10);
+      });
+      return size;
+    }
+
+    function outerHeight($elem, margin) {
+      var size = $elem[0].offsetHeight;
+      ['top', 'bottom'].forEach(function(side) {
+        if (margin) size += parseInt($elem.css('margin-' + side), 10);
+      });
+      return size;
+    }
+
+    var width = outerWidth(this.$input);
+    this.$wrapper.css('width', width + 'px');
+
+    var top = this.$input.offset().top + outerHeight(this.$input, true);
+    this.$wrapper.css('top', top + 'px');
+    top -= this.$wrapper.offset().top - top;
+    this.$wrapper.css('top', top + 'px');
+
+    var left = this.$input.offset().left;
+    this.$wrapper.css('left', left + 'px');
+    left -= this.$wrapper.offset().left - left;
+    this.$wrapper.css('left', left + 'px');
+
+    this.trigger('redrawn');
   },
 
   _getSuggestions: function getSuggestions() {
@@ -272,7 +318,7 @@ _.mixin(Dropdown.prototype, EventEmitter, {
   },
 
   setLanguageDirection: function setLanguageDirection(dir) {
-    this.$menu.css(dir === 'ltr' ? css.ltr : css.rtl);
+    this.$menu.css(dir === 'ltr' ? this.css.ltr : this.css.rtl);
   },
 
   moveCursorUp: function moveCursorUp() {
